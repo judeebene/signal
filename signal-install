@@ -1,0 +1,167 @@
+sudo apt-get update
+sudo apt-get upgrade
+sudo apt-get install redis-server postgresql openjdk-8-jdk-headless supervisor
+sudo apt-get install maven
+sudo adduser  --disabled-password --quiet --gecos Whisper whisper
+sudo apt-get memcached
+
+git clone https://github.com/WhisperSystems/Signal-Server.git
+sudo su -
+export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64/"
+cd Signal-Server
+ mvn clean install
+
+git clone https://github.com/WhisperSystems/PushServer.git
+cd ../PushServer
+mvn clean install
+
+A Twillio account for SMS registration process confirmation
+An Amazon AWS S3 bucket service for messages' attachments
+A GCM account from google developer console: a senderId add a ApiKey. Create a project, senderId is the projectNumber. For ApiKey, go to API management -> credentials -> create credentials -> API Keys -> Server Key and save this key
+An APN account for Apple Push Notifications (two pem certificates) [ask]A
+
+Changing the supervisor config file (/etc/supervisor/supervisord.conf), adding the following 3 sections if not existing., adding the following 3 sections if not existing. 
+[program:redis]
+command=/usr/bin/redis-server
+user=whisper
+
+[program:memcache]
+command=/usr/bin/memcached -m 64 -p 11211 -u memcache -l 127.0.0.1
+user=whisper
+
+[program:postgresql]
+command=/usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main -c config_file=/etc/postgresql/9.5/main/postgresql.conf
+user=postgres
+========================
+
+Create the config files
+for TS
+vi /home/whisper/config/tsconfig.yml
+====
+twilio:
+  accountId: a
+  accountToken: a
+  numbers: [1]
+  localDomain: a
+
+push:
+   queueSize: 1000
+
+server:
+  applicationConnectors:
+    - type: https
+      port: 8080
+      keyStorePath: config/example.keystore
+      keyStorePassword: example
+      validateCerts: false
+  adminConnectors:
+    - type: https
+      port: 8081
+      keyStorePath: config/example.keystore
+      keyStorePassword: example
+      validateCerts: false
+
+cache:
+  url: redis://127.0.0.1:6379/0
+
+directory:
+  url: redis://127.0.0.1:6379/1
+
+messageStore:
+  driverClass: org.postgresql.Driver
+  user: whisper
+  password: whisper
+  url: jdbc:postgresql://localhost:5432/messagedb
+
+database:
+  driverClass: org.postgresql.Driver
+  user: whisper
+  password: whisper
+  url: jdbc:postgresql://localhost:5432/accountdb
+  properties:
+    charSet: UTF-8
+
+
+gcm:
+  senderId: 811306482558
+  apiKey: AAAAvOWie34:APA91bEsQ2G7iHyAjZFmXTvzN6ox_HKz2w6XmPKmUGY4FErvTjbz16KCsEnyV7bGaOYN4yLRVkof8oL9fFv5BAFi3kTsOOgQnuI7KtWpW7Rsl66f8gTEW6NH2Bp1lA-K6DYKBi7HGO48 #fcm demo jude
+
+
+apn:
+  pushCertificate: Cdsjalfksjdlfkjsdlfksdlfkjsdfkjas
+  pushKey: Ksflskdjfalsdkfjslkfslkfslkgslgkj
+  bundleId: maynotbeempty
+
+attachments: # AWS S3 configuration
+  accessKey: vvv
+  accessSecret: vvv
+  bucket: vvv
+
+profiles: # AWS S3 configuration
+  accessKey: vvv
+  accessSecret: vvv
+  bucket: vvv
+  region: vvv
+
+turn: # TURN server configuration
+  secret: secret # TURN server secret
+  uris:
+    - stun:yourdomain:80
+    - stun:yourdomain.com:443
+    - turn:yourdomain:443?transport=udp
+    - turn:etc.com:80?transport=udp
+
+~             
+===================
+
+for  Push
+===
+gcm:
+  senderId: 811306482558
+  apiKey: AAAAvOWie34:APA91bEsQ2G7iHyAjZFmXTvzN6ox_HKz2w6XmPKmUGY4FErvTjbz16KCsEnyV7bGaOYN4yLRVkof8oL9fFv5BAFi3kTsOOgQnuI7KtWpW7Rsl66f8gTEW6NH2Bp1lA-K6DYKBi7HGO48 #fcm demo jude
+
+  redphoneApiKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+apn:
+  pushCertificate: Cdsjalfksjdlfkjsdlfksdlfkjsdfkjas
+  pushKey: Ksflskdjfalsdkfjslkfslkfslkgslgkj
+  voipCertificate: Cdsjalfksjdlfkjsdlfksdlfkjsdfkjas
+  voipKey: Ksflskdjfalsdkfjslkfslkfslkgslgkj
+
+redis:
+  url: http://127.0.0.1:6379
+
+authentication:
+  servers:
+  -  name: "user"
+     password: "password"
+
+server:
+    applicationConnectors:
+    - type: http
+      port: 9090
+    adminConnectors:
+    - type: http
+      port: 9091
+
+====
+
+sample-keystore is  binary and can be accesed here ....
+shoud go in /home/whisper/config
+
+Copying TS and Push jar files to /home/whisper/jar
+
+these are taken from the TS abd Push build targets.
+
+=====
+Postgresql copnfiguration
+sudo -u postgres createdb -O whisper accountdb
+sudo -u postgres createdb -O whisper messagedb
+
+Under whisper login , configure the database
+java -jar jar/TextSecureServer-1.66.jar accountdb migrate config/tsconfig.yml
+java -jar jar/TextSecureServer-1.66.jar messagedb migrate config/tsconfig.yml
+
+
+run the servers
+java -Xrunjdwp:transport=dt_socket,server=y,address=8880,suspend=y -jar jar/TextSecureServer-1.66.jar server config/tsconfig.yml 
