@@ -7,7 +7,7 @@ sudo apt-get memcached
 
 git clone https://github.com/WhisperSystems/Signal-Server.git
 sudo su -
-export JAVA_HOME="/usr/lib/jvm/java-8-openjdk-amd64/"
+::
 cd Signal-Server
  mvn clean install
 
@@ -31,8 +31,11 @@ user=whisper
 
 [program:postgresql]
 command=/usr/lib/postgresql/9.5/bin/postgres -D /var/lib/postgresql/9.5/main -c config_file=/etc/postgresql/9.5/main/postgresql.conf
-user=postgres
+wiwuser=postgres
 ========================
+
+NOTE: Remember to change the postgres version above.
+
 
 Create the config files
 for TS
@@ -45,7 +48,7 @@ twilio:
   localDomain: a
 
 push:
-   queueSize: 1000
+   queueSize: 1000 
 
 server:
   applicationConnectors:
@@ -62,7 +65,7 @@ server:
       validateCerts: false
 
 cache:
-  url: redis://127.0.0.1:6379/0
+  url: redis://12cd 7.0.0.1:6379/0
 
 directory:
   url: redis://127.0.0.1:6379/1
@@ -147,14 +150,62 @@ server:
 ====
 
 sample-keystore is  binary and can be accesed here ....
-shoud go in /home/whisper/config
+ setup keystore file and copy to /home/whisper/config
 
-Copying TS and Push jar files to /home/whisper/jar
+ Steps to setup keystore.
+
+ from root directory
+
+
+ This script creates root CA and server certificates to be used by the client and the server.
+# rootCA.crt needs to be copied to the client to replace the system-wide root CA set
+# example.keystore needs to be referenced by keyStorePath in the server's config file
+
+# Create private key for root CA certificate
+openssl genrsa -out rootCA.key 4096
+
+# Create a self-signed root CA certificate
+openssl req -x509 -new -nodes  -days 3650 -out rootCA.crt -key rootCA.key
+
+# Create server certificate key
+openssl genrsa -out whisper.key 4096
+
+# Create Certificate Signing Request
+openssl req -new -key whisper.key -out whisper.csr
+
+# Sign the certificate with the root CA
+
+openssl x509 -req -in whisper.csr -CA rootCA.crt -CAkey rootCA.key -CAcreateserial -days 3650 -out whisper.crt -extensions extensions
+
+
+# Export to host key and certificate to PKCS12 format which is recognized by Java keytool
+openssl pkcs12 -export -password pass:example -in whisper.crt -inkey whisper.key -out keystore.p12 -name example -CAfile rootCA.crt
+
+# Import the host key and certificate to Java keystore format, so it can be used by dropwizard
+keytool -importkeystore -srcstoretype PKCS12 -srckeystore keystore.p12 -srcstorepass example -destkeystore example.keystore -deststorepass example
+
+#whisper.store bust be placed into  Android client
+keytool -importcert -v -trustcacerts -file whisper.crt -alias IntermediateCA -keystore whisper.store -provider org.bouncycastle.jce.provider.BouncyCastleProvider -providerpath ~/data/java/Signal_prj/bcprov-jdk15on-154.jar -storetype BKS -storepass whisper
+
+#for iOS client you have to convert  whisper.crt in  DER format and install whisper.cer in Signal-iOS
+openssl x509 -in whisper.crt -out whisper.cer -outform DER
+
+
+
+ =======================
+
+Copying TS   jar files to /home/whisper/jar
 
 these are taken from the TS abd Push build targets.
 
 =====
+
+ create database role
+
+
 Postgresql copnfiguration
+sudo -u postgres psql --command "CREATE USER whisper WITH SUPERUSER PASSWORD 'whisper';"
+
 sudo -u postgres createdb -O whisper accountdb
 sudo -u postgres createdb -O whisper messagedb
 
@@ -165,3 +216,20 @@ java -jar jar/TextSecureServer-1.66.jar messagedb migrate config/tsconfig.yml
 
 run the servers
 java -Xrunjdwp:transport=dt_socket,server=y,address=8880,suspend=y -jar jar/TextSecureServer-1.66.jar server config/tsconfig.yml 
+
+
+lsof -n -i4TCP:8880 | grep LISTEN
+
+
+
+
+
+
+ 
+
+setting up turn servers
+
+for test pupose ,
+ use http://numb.viagenie.ca/
+
+ https://github.com/coturn/coturn
