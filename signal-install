@@ -1,3 +1,6 @@
+https://github.com/dropwizard/dropwizard/blob/master/docs/source/manual/configuration.rst
+
+
 sudo apt-get update
 sudo apt-get upgrade
 sudo apt-get install redis-server postgresql openjdk-8-jdk-headless supervisor
